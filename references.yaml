@@ -1,0 +1,157 @@
+# ============================================================================
+# 📚 БИБЛИОГРАФИЯ В ФОРМАТЕ HAYAGRIVA
+# ============================================================================
+#
+# Этот файл используется для автоматического форматирования по ГОСТ Р 7.0.5-2008
+#
+# Использование в main.typ:
+#   #let sources = "references.yaml"
+#
+# Синтаксис ссылок в тексте:
+#   @ivanov2024           → [1]
+#   @ivanov2024 @petrov   → [1, 2] или [1-2]
+#   @ivanov2024[с. 45]    → [1, с. 45]
+#
+# ============================================================================
+
+# --- Книги на русском языке ---
+
+ivanov2024:
+  type: Book
+  title: "Машинное обучение: теория и практика"
+  author: Иванов, Иван Иванович
+  date: 2024
+  publisher: Издательство
+  location: Москва
+  pages: 320
+
+petrov2024:
+  type: Book
+  title: "Анализ данных в Python"
+  author:
+    - Петров, Пётр Петрович
+    - Сидоров, Сидор Сидорович
+  date: 2024
+  publisher: БХВ-Петербург
+  location: Санкт-Петербург
+  pages: 480
+
+kozlov2023:
+  type: Book
+  title: "Проектирование информационных систем"
+  author: Козлов, Константин Константинович
+  date: 2023
+  publisher: ИНФРА-М
+  location: Москва
+  pages: 256
+
+mikhailov2024:
+  type: Book
+  title: "Базы данных: проектирование и разработка"
+  author: Михайлов, Михаил Михайлович
+  date: 2024
+  publisher: Лань
+  location: Москва
+  pages: 384
+
+# --- Книги на английском языке ---
+
+smith2024:
+  type: Book
+  title: "Machine Learning: A Practical Guide"
+  author: Smith, John
+  date: 2024
+  publisher: O'Reilly Media
+  location: Sebastopol, CA
+  pages: 512
+
+johnson2024:
+  type: Book
+  title: "Deep Learning for Data Science"
+  author: Johnson, Robert
+  date: 2024
+  publisher: Manning Publications
+  location: Shelter Island, NY
+  pages: 448
+
+williams2023:
+  type: Book
+  title: "Data Engineering with Python"
+  author: Williams, Andrew
+  date: 2023
+  publisher: Packt Publishing
+  location: Birmingham
+  pages: 520
+
+# --- ГОСТы и стандарты ---
+
+gost7322017:
+  type: Misc
+  title: "ГОСТ 7.32-2017. Отчет о научно-исследовательской работе. Структура и правила оформления"
+  date: 2017
+  publisher: Стандартинформ
+  location: Москва
+  pages: 28
+
+gost1970190:
+  type: Misc
+  title: "ГОСТ 19.701-90. Схемы алгоритмов, программ, данных и систем"
+  date: 1990
+  publisher: Стандартинформ
+  location: Москва
+  pages: 24
+
+# --- Законы и нормативные акты ---
+
+fz152:
+  type: Legislation
+  title: "О персональных данных"
+  date: 2006-07-27
+  serial-number: 152-ФЗ
+
+# --- Статьи в журналах ---
+
+nikolaev2024:
+  type: Article
+  title: "Современные методы анализа данных"
+  author: Николаев, Николай Николаевич
+  date: 2024
+  parent:
+    type: Periodical
+    title: Информационные технологии
+    issue: 3
+  page-range: 45-52
+
+brown2020:
+  type: Article
+  title: "Language Models are Few-Shot Learners"
+  author:
+    - Brown, Tom
+    - Mann, Benjamin
+    - Ryder, Nick
+  date: 2020
+  parent:
+    type: Proceedings
+    title: "Advances in Neural Information Processing Systems"
+    volume: 33
+  page-range: 1877-1901
+
+# --- Веб-ресурсы ---
+
+python-docs:
+  type: Web
+  title: "Python Documentation"
+  url: https://docs.python.org/
+  date: 2026-01-15
+
+fastapi-docs:
+  type: Web
+  title: "FastAPI Documentation"
+  url: https://fastapi.tiangolo.com/
+  date: 2026-01-15
+
+sklearn-docs:
+  type: Web
+  title: "Scikit-learn: Machine Learning in Python"
+  url: https://scikit-learn.org/
+  date: 2026-01-15
