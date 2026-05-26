@@ -61,6 +61,33 @@
   [[#from\-#to]]
 }
 
+/// Номер рисунка в формате "Раздел.Номер" (для ссылок в тексте)
+/// Использование: рисунок #vkr-fig-num(<fig:label>)
+#let vkr-fig-num(label) = context {
+  let ch = counter(heading.where(level: 1)).at(label).first()
+  if ch == 0 { ch = 1 }
+  let num = counter(figure.where(kind: image)).at(label).first()
+  [#ch.#num]
+}
+
+/// Номер таблицы в формате "Раздел.Номер" (для ссылок в тексте)
+/// Использование: таблица #vkr-table-num(<tbl:label>)
+#let vkr-table-num(label) = context {
+  let ch = counter(heading.where(level: 1)).at(label).first()
+  if ch == 0 { ch = 1 }
+  let num = counter(figure.where(kind: table)).at(label).first()
+  [#ch.#num]
+}
+
+/// Номер листинга в формате "Раздел.Номер" (для ссылок в тексте)
+/// Использование: листинг #vkr-listing-num(<lst:label>)
+#let vkr-listing-num(label) = context {
+  let ch = counter(heading.where(level: 1)).at(label).first()
+  if ch == 0 { ch = 1 }
+  let num = counter(figure.where(kind: "listing")).at(label).first()
+  [#ch.#num]
+}
+
 /// Линия для подписи
 #let sign-line(width: 3cm) = box(
   width: width,
@@ -154,14 +181,14 @@
 }
 
 /// Листинг кода
-#let vkr-code(code, caption: none, lang: none, line-numbers: true) = {
+#let vkr-code(code, caption: none, lang: none, line-numbers: true, breakable: true) = {
   figure(
     block(
       fill: luma(248),
       stroke: (left: 3pt + rgb("#492F8C"), rest: 0.5pt + luma(200)),
       inset: 0pt,
       width: 100%,
-      breakable: true,
+      breakable: breakable,
       {
         set text(font: mono-font, size: font-size-code)
         set par(justify: false, leading: 0.6em)
@@ -185,7 +212,7 @@
 }
 
 /// Листинг из файла
-#let vkr-code-file(path, caption: none, lang: auto, line-numbers: true) = {
+#let vkr-code-file(path, caption: none, lang: auto, line-numbers: true, breakable: true) = {
   let code = read(path)
   let detected-lang = if lang == auto {
     let ext = path.split(".").last()
@@ -194,7 +221,7 @@
      css: "css", json: "json", yaml: "yaml", sh: "bash").at(ext, default: none)
   } else { lang }
   
-  vkr-code(code, caption: caption, lang: detected-lang, line-numbers: line-numbers)
+  vkr-code(code, caption: caption, lang: detected-lang, line-numbers: line-numbers, breakable: breakable)
 }
 
 // ============================================================================
@@ -210,7 +237,8 @@
   set document(title: title, author: student)
   
   // Язык и шрифт
-  set text(font: main-font, size: font-size-main, lang: "ru", region: "RU", hyphenate: true)
+  // Без переноса по слогам: целое слово уходит на следующую строку
+  set text(font: main-font, size: font-size-main, lang: "ru", region: "RU", hyphenate: false)
   
   // Страница
   set page(
@@ -352,9 +380,24 @@
     v(0.5em)
   }
   
-  // Списки
-  set list(indent: par-indent, marker: [—])
-  set enum(indent: par-indent)
+  // Списки — каждый элемент как абзац с красной строкой
+  show list: it => {
+    let idx = 0
+    for item in it.children {
+      if idx > 0 { parbreak() }
+      [— #item.body]
+      idx += 1
+    }
+  }
+  show enum: it => {
+    let start = if type(it.start) == int { it.start } else { 1 }
+    let idx = 0
+    for item in it.children {
+      if idx > 0 { parbreak() }
+      [#numbering(it.numbering, start + idx) #item.body]
+      idx += 1
+    }
+  }
   
   // Inline код
   show raw.where(block: false): box.with(
@@ -562,9 +605,28 @@
 // ============================================================================
 
 #let vkr-sources(sources) = {
-  // Методичка табл. 6: заголовок по центру, обычный шрифт, все прописные
-  // НО: это противоречит табл. 3 для заголовков 1 уровня
-  // Используем стандартный heading чтобы попасть в содержание
+  // Методичка табл. 6: заголовок по центру, обычный шрифт (14 пт), все прописные
+  // Локально переопределяем оформление заголовка, не затрагивая остальные разделы.
+  show heading.where(level: 1): it => {
+    // Сброс счётчиков как для остальных разделов
+    counter(figure.where(kind: image)).update(0)
+    counter(figure.where(kind: table)).update(0)
+    counter(figure.where(kind: "listing")).update(0)
+    counter(math.equation).update(0)
+    
+    pagebreak(weak: true)
+    v(0pt)
+    
+    block(width: 100%, {
+      set text(size: font-size-main)
+      set par(first-line-indent: 0pt, leading: line-spacing)
+      align(center)[#upper(it.body)]
+    })
+    
+    // Табл. 6: интервал после 6 мм
+    v(6mm)
+  }
+  
   heading(level: 1, numbering: none, outlined: true)[Список используемых источников]
   
   set par(first-line-indent: 0pt)

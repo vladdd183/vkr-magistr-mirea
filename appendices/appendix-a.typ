@@ -1,180 +1,281 @@
 // ============================================================================
-// 📎 ПРИЛОЖЕНИЕ А: Листинг основного модуля системы
+// 📎 ПРИЛОЖЕНИЕ А: Листинги ключевых модулей системы vladOS
 // ============================================================================
 
 #import "../template.typ": vkr-code, vkr-appendix
 
-#vkr-appendix("А", "Листинг основного модуля системы")[
+#vkr-appendix("А", "Листинги ключевых модулей системы vladOS")[
+
+== А.1. Точка входа системы (flake.nix)
 
 #vkr-code(
-  caption: [Основной модуль API системы (main.py)],
-  lang: "python",
+  caption: [Основной файл flake.nix системы vladOS (фрагмент)],
+  lang: "nix",
   ```
-from fastapi import FastAPI, UploadFile, File, HTTPException, Depends
-from fastapi.middleware.cors import CORSMiddleware
-from sklearn.ensemble import RandomForestClassifier
-from sklearn.model_selection import train_test_split
-from sklearn.metrics import accuracy_score, f1_score
-import pandas as pd
-import numpy as np
-from typing import Optional
-import joblib
-import os
+{
+  description = "VladOS v2 — Улучшенная модульная конфигурация Snowfall";
 
-# Создание приложения
-app = FastAPI(
-    title="ML Analysis System",
-    description="Система автоматизированного анализа данных",
-    version="1.0.0"
+  inputs = {
+    # Основные входы
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
+    unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    
+    # Snowfall — фреймворк организации
+    snowfall-lib = {
+      url = "github:snowfallorg/lib";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
+    # Home Manager — управление пользовательскими конфигурациями
+    home-manager = {
+      url = "github:nix-community/home-manager/release-25.11";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
+    # Управление секретами
+    sops-nix = {
+      url = "github:Mic92/sops-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
+    # nix-topology — генерация диаграмм инфраструктуры
+    nix-topology = {
+      url = "github:oddlama/nix-topology";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    
+    # deploy-rs — CI/CD деплой с автоматическим rollback
+    deploy-rs = {
+      url = "github:serokell/deploy-rs";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+  };
+
+  outputs = inputs @ { self, ... }:
+    let
+      inherit (inputs) snowfall-lib;
+
+      lib = snowfall-lib.mkLib {
+        inherit inputs;
+        src = ./.;
+        snowfall = {
+          meta = { name = "vladOS"; title = "VladOS v2"; };
+          namespace = "vladOS";
+        };
+      };
+      
+      flakeOutputs = lib.mkFlake {
+        inherit inputs;
+        src = ./.;
+        
+        channels-config = {
+          allowUnfree = true;
+          allowUnfreePredicate = (_: true);
+        };
+        
+        # Модули для NixOS
+        systems.modules.nixos = with inputs; [
+          home-manager.nixosModules.home-manager
+          sops-nix.nixosModules.sops
+          nix-topology.nixosModules.default
+        ];
+      };
+    in
+    lib.recursiveUpdate flakeOutputs {
+      # deploy-rs интеграция
+      deploy = flakeOutputs.lib.mkDeploy {
+        self = flakeOutputs // { inherit (flakeOutputs) nixosConfigurations; };
+      };
+      
+      # Шаблоны проектов
+      templates = {
+        python-porto-uv = {
+          path = ./templates/python-porto-uv;
+          description = "Python Porto архитектура с UV и Docker";
+        };
+        nextjs-app = {
+          path = ./templates/nextjs-app;
+          description = "Next.js 15 App Router с TypeScript и Tailwind";
+        };
+      };
+    };
+}
+  ```.text,
 )
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+#pagebreak()
+
+== А.2. Базовый набор common (suites/common)
+
+#vkr-code(
+  caption: [Модуль suites/common — базовые настройки для всех хостов],
+  lang: "nix",
+  ```
+# modules/nixos/suites/common/default.nix
+{ config, lib, pkgs, namespace, ... }:
+
+let
+  inherit (lib) mkIf mkEnableOption;
+  inherit (lib.${namespace}) enabled enabledList mkPackageGroups;
+  cfg = config.${namespace}.suites.common;
+  pkgGroups = mkPackageGroups pkgs;
+in
+{
+  options.${namespace}.suites.common = {
+    enable = mkEnableOption "Базовая конфигурация системы";
+  };
+
+  config = mkIf cfg.enable {
+    # Базовые модули
+    ${namespace} = {
+      system = enabledList [ "boot" "locale" "networking" ];
+      security = enabled;
+      programs.nh = {
+        enable = true;
+        clean = { enable = true; extraArgs = "--keep-since 7d --keep 5"; };
+      };
+    };
+
+    # Базовые пакеты
+    environment.systemPackages = pkgGroups.cliBase ++ (with pkgs; [
+      vim nano dnsutils netcat pciutils usbutils lsof git htop
+    ]);
+
+    # Настройки Nix — оптимизация сборки
+    nixpkgs.config.allowUnfree = true;
+    nix = {
+      settings = {
+        experimental-features = [ "nix-command" "flakes" ];
+        max-jobs = "auto";
+        cores = 0;
+        auto-optimise-store = true;
+        keep-outputs = true;
+        keep-derivations = true;
+        substituters = [
+          "https://nix-community.cachix.org?priority=8"
+          "https://cache.nixos.org?priority=9"
+        ];
+        trusted-users = [ "root" "@wheel" ];
+      };
+      gc.automatic = false; # Используем nh clean
+    };
+
+    # ZRAM — сжатый swap в RAM
+    zramSwap = { enable = true; algorithm = "zstd"; memoryPercent = 50; };
+    
+    # tmpfs для /tmp — сборка в RAM
+    boot.tmp = { useTmpfs = true; tmpfsSize = "50%"; cleanOnBoot = true; };
+    
+    # TRIM для SSD
+    services.fstrim = { enable = true; interval = "weekly"; };
+  };
+}
+  ```.text,
 )
 
-# Хранилище моделей
-models_storage = {}
-datasets_storage = {}
+#pagebreak()
 
+== А.3. Модуль Docker
 
-@app.post("/api/upload")
-async def upload_file(file: UploadFile = File(...)):
-    """Загрузка файла с данными."""
-    if not file.filename.endswith('.csv'):
-        raise HTTPException(
-            status_code=400,
-            detail="Only CSV files are supported"
-        )
-    
-    try:
-        df = pd.read_csv(file.file)
-        dataset_id = len(datasets_storage) + 1
-        datasets_storage[dataset_id] = df
-        
-        return {
-            "dataset_id": dataset_id,
-            "filename": file.filename,
-            "rows": len(df),
-            "columns": list(df.columns),
-            "dtypes": df.dtypes.astype(str).to_dict()
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+#vkr-code(
+  caption: [Модуль services/docker — контейнеризация],
+  lang: "nix",
+  ```
+# modules/nixos/services/docker/default.nix
+{ config, lib, pkgs, namespace, ... }:
 
+let
+  inherit (lib) mkIf mkEnableOption;
+  inherit (lib.${namespace}) mkBoolOpt mkPackageGroups;
+  cfg = config.${namespace}.services.docker;
+  pkgGroups = mkPackageGroups pkgs;
+in
+{
+  options.${namespace}.services.docker = {
+    enable = mkEnableOption "Docker";
+    autoPrune = mkBoolOpt true "Автоматическая очистка";
+    compose = mkBoolOpt true "Docker Compose";
+  };
 
-@app.post("/api/train")
-async def train_model(
-    dataset_id: int,
-    target_column: str,
-    algorithm: str = "random_forest",
-    test_size: float = 0.2
-):
-    """Обучение модели машинного обучения."""
-    if dataset_id not in datasets_storage:
-        raise HTTPException(status_code=404, detail="Dataset not found")
+  config = mkIf cfg.enable {
+    virtualisation.docker = {
+      enable = true;
+      enableOnBoot = true;
+      autoPrune = lib.mkIf cfg.autoPrune {
+        enable = true;
+        dates = "weekly";
+        flags = [ "--all" "--volumes" ];
+      };
+    };
     
-    df = datasets_storage[dataset_id]
-    
-    if target_column not in df.columns:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Column {target_column} not found"
-        )
-    
-    # Подготовка данных
-    X = df.drop(columns=[target_column])
-    y = df[target_column]
-    
-    # Только числовые колонки
-    X = X.select_dtypes(include=[np.number])
-    
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=42
-    )
-    
-    # Выбор алгоритма
-    if algorithm == "random_forest":
-        model = RandomForestClassifier(
-            n_estimators=100,
-            random_state=42,
-            n_jobs=-1
-        )
-    else:
-        raise HTTPException(
-            status_code=400,
-            detail=f"Unknown algorithm: {algorithm}"
-        )
-    
-    # Обучение
-    model.fit(X_train, y_train)
-    
-    # Оценка
-    y_pred = model.predict(X_test)
-    accuracy = accuracy_score(y_test, y_pred)
-    f1 = f1_score(y_test, y_pred, average='weighted')
-    
-    # Сохранение модели
-    model_id = len(models_storage) + 1
-    models_storage[model_id] = {
-        "model": model,
-        "features": list(X.columns),
-        "target": target_column
-    }
-    
-    return {
-        "model_id": model_id,
-        "algorithm": algorithm,
-        "accuracy": round(accuracy, 4),
-        "f1_score": round(f1, 4),
-        "features_used": list(X.columns)
-    }
+    # Пакеты для работы с контейнерами
+    environment.systemPackages = pkgGroups.containers;
+  };
+}
+  ```.text,
+)
 
+#pagebreak()
 
-@app.post("/api/predict")
-async def predict(model_id: int, data: dict):
-    """Получение предсказания модели."""
-    if model_id not in models_storage:
-        raise HTTPException(status_code=404, detail="Model not found")
-    
-    model_info = models_storage[model_id]
-    model = model_info["model"]
-    features = model_info["features"]
-    
-    try:
-        # Формируем входные данные
-        X = pd.DataFrame([data])[features]
-        
-        # Предсказание
-        prediction = model.predict(X)
-        probabilities = model.predict_proba(X)
-        
-        return {
-            "prediction": prediction.tolist(),
-            "probabilities": probabilities.tolist(),
-            "features_used": features
-        }
-    except Exception as e:
-        raise HTTPException(status_code=400, detail=str(e))
+== А.4. Система профилей с наследованием
 
+#vkr-code(
+  caption: [Библиотека профилей lib/profiles/default.nix (фрагмент)],
+  lang: "nix",
+  ```
+# lib/profiles/default.nix
+{ lib, namespace, ... }:
 
-@app.get("/api/health")
-async def health_check():
-    """Проверка работоспособности API."""
-    return {
-        "status": "healthy",
-        "datasets_count": len(datasets_storage),
-        "models_count": len(models_storage)
-    }
+let
+  inherit (lib.${namespace}) enabled;
+  desktopProfiles = import ./desktop/_desktop.nix { inherit namespace; };
+  serverProfiles = import ./server/_server.nix { inherit lib namespace; };
+  profiles = desktopProfiles // serverProfiles;
+in
+rec {
+  inherit profiles;
 
+  # Развернуть профиль с рекурсивным наследованием
+  expandProfile = name:
+    let
+      profile = profiles.${name} or (throw "Profile '${name}' not found");
+      emptyProfile = {
+        suites = []; hardware = []; services = []; programs = [];
+        desktop = null; config = {};
+      };
+      parent = if profile ? extends
+        then expandProfile profile.extends
+        else emptyProfile;
+    in {
+      suites = lib.unique (parent.suites ++ (profile.suites or []));
+      hardware = lib.unique (parent.hardware ++ (profile.hardware or []));
+      services = lib.unique (parent.services ++ (profile.services or []));
+      programs = lib.unique (parent.programs ++ (profile.programs or []));
+      desktop = if profile ? desktop then profile.desktop else parent.desktop;
+      config = lib.recursiveUpdate (parent.config or {}) (profile.config or {});
+    };
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+  # Применить профиль к конфигурации NixOS
+  applyProfile = profileName:
+    let
+      p = expandProfile profileName;
+      pathToAttr = path:
+        let parts = lib.splitString "." path;
+        in lib.setAttrByPath parts enabled;
+      programsConfig = lib.foldl' lib.recursiveUpdate {} (map pathToAttr p.programs);
+      hardwareConfig = lib.foldl' lib.recursiveUpdate {} (map pathToAttr p.hardware);
+    in lib.mkMerge [
+      { ${namespace}.suites = lib.genAttrs p.suites (_: enabled); }
+      (lib.mkIf (p.hardware != []) { ${namespace}.hardware = hardwareConfig; })
+      (lib.mkIf (p.services != []) { ${namespace}.services = lib.genAttrs p.services (_: enabled); })
+      (lib.mkIf (p.programs != []) { ${namespace}.programs = programsConfig; })
+      (lib.mkIf (p.desktop != null) { ${namespace}.desktop.${p.desktop} = enabled; })
+      p.config
+    ];
+
+  # Комбинировать несколько профилей
+  combineProfiles = profileNames: lib.mkMerge (map applyProfile profileNames);
+}
   ```.text,
 )
 
